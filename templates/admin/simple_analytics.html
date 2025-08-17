@@ -1,0 +1,12 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block title %}{{ title }} - {{ site_title }}{% endblock %}
+
+{% block content %}
+<div style="padding: 20px;">
+    <h1>{{ title }}</h1>
+    <p>Analytics dashboard placeholder. This view prevents URL reverse lookup errors.</p>
+    <p><a href="{% url 'admin:index' %}">Return to Admin Home</a></p>
+</div>
+{% endblock %}
