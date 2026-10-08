@@ -2,6 +2,7 @@ import csv
 import os
 from django.core.management.base import BaseCommand
 from django.conf import settings
+from apps.core.envconf import required_env
 from apps.users.models import User
 
 
@@ -23,7 +24,14 @@ class Command(BaseCommand):
         if not os.path.isabs(output_file):
             output_file = os.path.join(settings.BASE_DIR, output_file)
             
+        admin_password = required_env("ADMIN_PASSWORD")
+        test_password = required_env("TEST_USER_PASSWORD")
+
         self.stdout.write(f"Exporting user credentials to: {output_file}")
+        self.stdout.write(
+            "Passwords are read from ADMIN_PASSWORD and TEST_USER_PASSWORD. "
+            "Do not commit the CSV."
+        )
         
         # Get all users
         users = User.objects.all().order_by('username')
@@ -40,14 +48,14 @@ class Command(BaseCommand):
             writer.writeheader()
             
             for user in users:
-                # Note: In a real application, passwords are hashed and cannot be retrieved
-                # For testing purposes, we'll include the default password
-                password = 'testpass123' if user.username != 'admin' else 'admin123'
+                # Passwords are hashed in the database and cannot be recovered.
+                # The CSV records the seed passwords supplied via the environment.
+                password = admin_password if user.username == 'admin' or user.role == 'admin' else test_password
                 
                 writer.writerow({
                     'username': user.username,
                     'email': user.email,
-                    'password': password,  # Default test password
+                    'password': password,
                     'first_name': user.first_name,
                     'last_name': user.last_name,
                     'phone': user.phone or '',
@@ -71,8 +79,12 @@ class Command(BaseCommand):
         self.stdout.write(self.style.WARNING('\n=== SAMPLE CREDENTIALS ==='))
         sample_users = users[:5]
         for user in sample_users:
-            password = 'testpass123' if user.username != 'admin' else 'admin123'
-            self.stdout.write(f"Username: {user.username} | Password: {password} | Role: {user.role}")
+            password_source = (
+                "ADMIN_PASSWORD" if user.username == 'admin' or user.role == 'admin' else "TEST_USER_PASSWORD"
+            )
+            self.stdout.write(
+                f"Username: {user.username} | Password source: {password_source} | Role: {user.role}"
+            )
         
         if users.count() > 5:
             self.stdout.write(f"... and {users.count() - 5} more users")
@@ -81,5 +93,5 @@ class Command(BaseCommand):
         admin_user = users.filter(role='admin').first()
         if admin_user:
             self.stdout.write(f"Admin Username: {admin_user.username}")
-            self.stdout.write(f"Admin Password: admin123")
+            self.stdout.write("Admin password source: ADMIN_PASSWORD")
             self.stdout.write(f"Admin Email: {admin_user.email}")

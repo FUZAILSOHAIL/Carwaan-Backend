@@ -12,6 +12,7 @@ from decimal import Decimal
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 from django.contrib.auth.hashers import make_password
+from apps.core.envconf import required_env
 from apps.users.models import User, Vehicle
 from apps.rides.models import Ride, Location
 import pytz
@@ -37,11 +38,11 @@ class Command(BaseCommand):
         self.stdout.write(
             self.style.SUCCESS(
                 'Quick test data created successfully!\n'
-                'Test accounts:\n'
-                '- Male Driver: hassan.ahmed.0@test.carwaan.pk (password: testpass123)\n'
-                '- Female Driver: aisha.malik.2@test.carwaan.pk (password: testpass123)\n'
-                '- Female Passenger: fatima.khan.1@test.carwaan.pk (password: testpass123)\n'
-                '- Admin: admin@carwaan.pk (password: admin123)\n'
+                'Test accounts (passwords come from the environment, not the source tree):\n'
+                '- Male Driver: hassan.ahmed.0@test.carwaan.pk (TEST_USER_PASSWORD)\n'
+                '- Female Driver: aisha.malik.2@test.carwaan.pk (TEST_USER_PASSWORD)\n'
+                '- Female Passenger: fatima.khan.1@test.carwaan.pk (TEST_USER_PASSWORD)\n'
+                '- Admin: admin@carwaan.pk (ADMIN_PASSWORD)\n'
                 f'- Created {len(rides)} test rides (including female-only rides)'
             )
         )
@@ -74,13 +75,15 @@ class Command(BaseCommand):
     def create_test_users(self):
         """Create a few test users with different roles"""
         users = []
+        admin_password = required_env("ADMIN_PASSWORD")
+        test_password = required_env("TEST_USER_PASSWORD")
         
         # Create admin user
         admin_user, created = User.objects.get_or_create(
             email='admin@carwaan.pk',
             defaults={
                 'username': 'admin',
-                'password': make_password('admin123'),
+                'password': make_password(admin_password),
                 'first_name': 'Admin',
                 'last_name': 'User',
                 'role': 'admin',
@@ -108,7 +111,7 @@ class Command(BaseCommand):
             email='hassan.ahmed.0@test.carwaan.pk',
             defaults={
                 'username': 'hassan_ahmed',
-                'password': make_password('testpass123'),
+                'password': make_password(test_password),
                 'first_name': 'Hassan',
                 'last_name': 'Ahmed',
                 'gender': 'male',
@@ -132,7 +135,7 @@ class Command(BaseCommand):
             email='fatima.khan.1@test.carwaan.pk',
             defaults={
                 'username': 'fatima_khan',
-                'password': make_password('testpass123'),
+                'password': make_password(test_password),
                 'first_name': 'Fatima',
                 'last_name': 'Khan',
                 'gender': 'female',
@@ -151,7 +154,7 @@ class Command(BaseCommand):
             email='aisha.malik.2@test.carwaan.pk',
             defaults={
                 'username': 'aisha_malik',
-                'password': make_password('testpass123'),
+                'password': make_password(test_password),
                 'first_name': 'Aisha',
                 'last_name': 'Malik',
                 'gender': 'female',

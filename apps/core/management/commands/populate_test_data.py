@@ -10,6 +10,7 @@ from django.conf import settings
 from apps.users.models import User, Vehicle, PaymentMethod
 from apps.rides.models import Ride, RidePassenger, RideReview, RideDirection, Location
 from django.contrib.auth.hashers import make_password
+from apps.core.envconf import required_env
 
 
 class Command(BaseCommand):
@@ -39,17 +40,20 @@ class Command(BaseCommand):
             self.stdout.write('Clearing existing data...')
             self.clear_data()
 
+        admin_password = required_env("ADMIN_PASSWORD")
+        test_password = required_env("TEST_USER_PASSWORD")
+
         with transaction.atomic():
             self.stdout.write('Creating test data...')
             
             # Create admin user
-            admin_user = self.create_admin_user()
+            admin_user = self.create_admin_user(admin_password)
             
             # Create locations
             locations = self.create_locations()
             
             # Create users
-            users = self.create_users(options['users'])
+            users = self.create_users(options['users'], test_password)
             
             # Create vehicles
             vehicles = self.create_vehicles(users)
@@ -69,8 +73,8 @@ class Command(BaseCommand):
             # Create reviews
             self.create_reviews(rides, users)
 
-        # Export user credentials to CSV
-        self.export_credentials_to_csv(users)
+        # Export user credentials to CSV (gitignored; passwords come from the environment)
+        self.export_credentials_to_csv(users, admin_password, test_password)
         
         self.stdout.write(
             self.style.SUCCESS(
@@ -91,7 +95,7 @@ class Command(BaseCommand):
         RideDirection.objects.all().delete()
         User.objects.filter(is_superuser=False).delete()
 
-    def create_admin_user(self):
+    def create_admin_user(self, admin_password):
         """Create admin user"""
         admin, created = User.objects.get_or_create(
             username='admin',
@@ -104,7 +108,7 @@ class Command(BaseCommand):
                 'is_superuser': True,
                 'is_verified': True,
                 'email_verified': True,
-                'password': make_password('admin123'),
+                'password': make_password(admin_password),
                 'gender': 'male',
                 'phone': '+923001234567',
                 'workplace': 'Carwaan Technologies',
@@ -164,7 +168,7 @@ class Command(BaseCommand):
         
         return locations
 
-    def create_users(self, count):
+    def create_users(self, count, test_password):
         """Create test users with Pakistani names"""
         pakistani_names = {
             'male': [
@@ -231,7 +235,7 @@ class Command(BaseCommand):
                 email=email,
                 first_name=first_name,
                 last_name=last_name,
-                password=make_password('password123'),
+                password=make_password(test_password),
                 gender=gender,
                 phone=phone,
                 is_verified=True,
@@ -597,8 +601,8 @@ class Command(BaseCommand):
                             ])
                         )
 
-    def export_credentials_to_csv(self, users):
-        """Export user credentials to CSV file"""
+    def export_credentials_to_csv(self, users, admin_password, test_password):
+        """Export user credentials to a gitignored CSV file"""
         output_file = os.path.join(settings.BASE_DIR, 'test_user_credentials.csv')
         
         self.stdout.write(f"Exporting user credentials to: {output_file}")
@@ -615,8 +619,7 @@ class Command(BaseCommand):
             writer.writeheader()
             
             for user in users:
-                # All test users use the same password for easy testing
-                password = 'testpass123' if user.username != 'admin' else 'admin123'
+                password = admin_password if user.username == 'admin' or user.role == 'admin' else test_password
                 
                 # Determine user type for login purposes
                 if user.role == 'admin':
@@ -655,21 +658,22 @@ class Command(BaseCommand):
         # Admin user
         admin_user = next((u for u in users if u.role == 'admin'), None)
         if admin_user:
-            self.stdout.write(f"🔑 ADMIN: {admin_user.username} / admin123")
+            self.stdout.write(f"ADMIN: {admin_user.username} (password from ADMIN_PASSWORD)")
         
         # Sample drivers
         drivers = [u for u in users if u.is_driver and u.driver_verification_status == 'verified'][:3]
         if drivers:
-            self.stdout.write("🚗 DRIVERS:")
+            self.stdout.write("DRIVERS:")
             for driver in drivers:
-                self.stdout.write(f"   {driver.username} / testpass123")
+                self.stdout.write(f"   {driver.username} (password from TEST_USER_PASSWORD)")
         
         # Sample passengers
         passengers = [u for u in users if not u.is_driver][:3]
         if passengers:
-            self.stdout.write("👥 PASSENGERS:")
+            self.stdout.write("PASSENGERS:")
             for passenger in passengers:
-                self.stdout.write(f"   {passenger.username} / testpass123")
+                self.stdout.write(f"   {passenger.username} (password from TEST_USER_PASSWORD)")
         
-        self.stdout.write(f"\n📄 Full credentials list: {output_file}")
-        self.stdout.write("💡 All users (except admin) use password: testpass123")
+        self.stdout.write(f"\nFull credentials list: {output_file}")
+        self.stdout.write("Admin password source: ADMIN_PASSWORD. Other users: TEST_USER_PASSWORD.")
+        self.stdout.write("This CSV contains plaintext passwords and is gitignored. Do not commit it.")
