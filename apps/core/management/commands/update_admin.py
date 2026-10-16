@@ -1,6 +1,7 @@
 from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
 from django.db import transaction
+from apps.core.envconf import required_env
 from apps.users.models import User
 from apps.rides.models import Ride, RidePassenger
 
@@ -63,18 +64,20 @@ class Command(BaseCommand):
             
         try:
             with transaction.atomic():
+                password = required_env("ADMIN_PASSWORD")
                 user = User.objects.create_superuser(
                     username=username,
                     email=email,
-                    password='admin123',  # Default password - should be changed
+                    password=password,
                     first_name='Admin',
                     last_name='User',
                     role='admin'
                 )
                 self.stdout.write(
                     self.style.SUCCESS(
-                        f'Created superuser: {username} (password: admin123)\n'
-                        'Please change the password after first login!'
+                        f'Created superuser: {username}. '
+                        'Password was taken from ADMIN_PASSWORD. '
+                        'Change it after first login.'
                     )
                 )
         except Exception as e:

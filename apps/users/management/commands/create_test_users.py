@@ -3,12 +3,15 @@ from django.contrib.auth import get_user_model
 from datetime import date
 import random
 
+from apps.core.envconf import required_env
+
 User = get_user_model()
 
 class Command(BaseCommand):
     help = 'Create test driver and passenger accounts'
 
     def handle(self, *args, **options):
+        test_password = required_env("TEST_USER_PASSWORD")
         self.stdout.write(self.style.SUCCESS('Creating test users...'))
         
         # Create Test Driver
@@ -86,7 +89,7 @@ class Command(BaseCommand):
             driver.save()
             self.stdout.write(self.style.WARNING('Updated existing test_driver'))
         except User.DoesNotExist:
-            driver = User.objects.create_user(password='test123', **test_driver_data)
+            driver = User.objects.create_user(password=test_password, **test_driver_data)
             self.stdout.write(self.style.SUCCESS('Created new test_driver'))
         
         # Create or update test passenger
@@ -97,7 +100,7 @@ class Command(BaseCommand):
             passenger.save()
             self.stdout.write(self.style.WARNING('Updated existing test_passenger'))
         except User.DoesNotExist:
-            passenger = User.objects.create_user(password='test123', **test_passenger_data)
+            passenger = User.objects.create_user(password=test_password, **test_passenger_data)
             self.stdout.write(self.style.SUCCESS('Created new test_passenger'))
         
         # Additional test users with different profiles
@@ -152,16 +155,17 @@ class Command(BaseCommand):
                 user = User.objects.get(username=user_data['username'])
                 self.stdout.write(self.style.WARNING(f"User {user_data['username']} already exists"))
             except User.DoesNotExist:
-                user = User.objects.create_user(password='test123', **user_data)
+                user = User.objects.create_user(password=test_password, **user_data)
                 self.stdout.write(self.style.SUCCESS(f"Created {user_data['username']}"))
         
         self.stdout.write(self.style.SUCCESS('\n=== TEST ACCOUNTS CREATED ==='))
         self.stdout.write(self.style.SUCCESS('Main Test Accounts:'))
-        self.stdout.write(f'Driver: test_driver / test123 (Ahmed Khan - Toyota Corolla)')
-        self.stdout.write(f'Passenger: test_passenger / test123 (Fatima Ahmed - Student)')
+        self.stdout.write('Driver: test_driver (Ahmed Khan - Toyota Corolla)')
+        self.stdout.write('Passenger: test_passenger (Fatima Ahmed - Student)')
         self.stdout.write(self.style.SUCCESS('\nAdditional Test Accounts:'))
-        self.stdout.write(f'Driver: driver_male_south / test123 (Muhammad Ali - Honda Civic)')
-        self.stdout.write(f'Passenger: passenger_female_east / test123 (Ayesha Siddiqui - Nurse)')
+        self.stdout.write('Driver: driver_male_south (Muhammad Ali - Honda Civic)')
+        self.stdout.write('Passenger: passenger_female_east (Ayesha Siddiqui - Nurse)')
+        self.stdout.write('Password for every account above: TEST_USER_PASSWORD from the environment.')
         self.stdout.write(self.style.SUCCESS('\nAll accounts have detailed profiles with:'))
         self.stdout.write('- Realistic Karachi addresses')
         self.stdout.write('- Car details (for drivers)')

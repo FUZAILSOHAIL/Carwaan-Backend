@@ -13,25 +13,54 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 from pathlib import Path
 import os
 from datetime import timedelta
-from dotenv import load_dotenv
 
-# Load environment variables
-load_dotenv()
+from django.core.exceptions import ImproperlyConfigured
+from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Load a gitignored .env when present. Existing process env vars win.
+load_dotenv(BASE_DIR / ".env")
+
+
+def _env_bool(name, default=False):
+    raw = os.getenv(name)
+    if raw is None or raw.strip() == "":
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _env_list(name):
+    raw = os.getenv(name, "")
+    return [item.strip() for item in raw.split(",") if item.strip()]
 
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv("SECRET_KEY")
+SECRET_KEY = os.getenv("SECRET_KEY", "").strip()
+if not SECRET_KEY:
+    raise ImproperlyConfigured(
+        "SECRET_KEY is not set. Copy .env.example to .env and set a long random SECRET_KEY."
+    )
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv("DEBUG", "False") == "True"
+# Default is off. Set DEBUG=True only in a local .env file.
+DEBUG = _env_bool("DEBUG", default=False)
 
-ALLOWED_HOSTS = ["*", "192.168.100.32", "localhost", "127.0.0.1"]
+# No wildcard by default. Local debug falls back to loopback hosts only.
+# Production must set an explicit ALLOWED_HOSTS list.
+_allowed_hosts = _env_list("ALLOWED_HOSTS")
+if not _allowed_hosts and DEBUG:
+    _allowed_hosts = ["localhost", "127.0.0.1"]
+if not DEBUG and (not _allowed_hosts or "*" in _allowed_hosts):
+    raise ImproperlyConfigured(
+        "ALLOWED_HOSTS must be a comma-separated list of explicit hosts when "
+        "DEBUG is False. A wildcard is not allowed."
+    )
+ALLOWED_HOSTS = _allowed_hosts
 AUTH_USER_MODEL = "users.User"
 
 STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
@@ -97,12 +126,36 @@ WSGI_APPLICATION = "backend.wsgi.application"
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+# SQLite needs no credentials and stays the local default.
+# Other engines read DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, and DB_PORT.
+_db_engine = os.getenv("DB_ENGINE", "django.db.backends.sqlite3").strip()
+_db_name = os.getenv("DB_NAME", "db.sqlite3").strip()
+
+if _db_engine == "django.db.backends.sqlite3":
+    _sqlite_path = Path(_db_name)
+    if not _sqlite_path.is_absolute():
+        _sqlite_path = BASE_DIR / (_db_name or "db.sqlite3")
+    DATABASES = {
+        "default": {
+            "ENGINE": _db_engine,
+            "NAME": _sqlite_path,
+        }
     }
-}
+else:
+    if not _db_name:
+        raise ImproperlyConfigured(
+            "DB_NAME is required when DB_ENGINE is not django.db.backends.sqlite3."
+        )
+    DATABASES = {
+        "default": {
+            "ENGINE": _db_engine,
+            "NAME": _db_name,
+            "USER": os.getenv("DB_USER", ""),
+            "PASSWORD": os.getenv("DB_PASSWORD", ""),
+            "HOST": os.getenv("DB_HOST", "localhost"),
+            "PORT": os.getenv("DB_PORT", ""),
+        }
+    }
 
 
 # Password validation
@@ -178,17 +231,29 @@ SIMPLE_JWT = {
     "BLACKLIST_AFTER_ROTATION": True,
 }
 
-# CORS settings
-CORS_ALLOWED_ORIGINS = [
-    "http://192.168.100.32:8000",
-    "http://0.0.0.0:8000",
-    "http://127.0.0.1:8000",
-]
+# CORS settings. Allow-all is off unless explicitly enabled, and never when
+# DEBUG is False. Set CORS_ALLOWED_ORIGINS to a comma-separated origin list.
+_cors_allow_all = _env_bool("CORS_ALLOW_ALL_ORIGINS", default=False)
+if _cors_allow_all and not DEBUG:
+    raise ImproperlyConfigured(
+        "CORS_ALLOW_ALL_ORIGINS cannot be enabled when DEBUG is False."
+    )
+CORS_ALLOW_ALL_ORIGINS = _cors_allow_all
+
+_cors_origins = _env_list("CORS_ALLOWED_ORIGINS")
+if "*" in _cors_origins:
+    raise ImproperlyConfigured(
+        "CORS_ALLOWED_ORIGINS cannot contain a wildcard. "
+        "List explicit origins, or set CORS_ALLOW_ALL_ORIGINS=True only when DEBUG is True."
+    )
+if not _cors_origins and DEBUG and not CORS_ALLOW_ALL_ORIGINS:
+    _cors_origins = [
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+    ]
+CORS_ALLOWED_ORIGINS = [] if CORS_ALLOW_ALL_ORIGINS else _cors_origins
 
 CORS_ALLOW_CREDENTIALS = True
-
-# Allow all origins in development
-CORS_ALLOW_ALL_ORIGINS = True
 
 # Email settings - SMTP Configuration for real email sending
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"

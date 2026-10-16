@@ -19,6 +19,7 @@ from decimal import Decimal
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 from django.contrib.auth.hashers import make_password
+from apps.core.envconf import required_env
 from apps.users.models import User, Vehicle
 from apps.rides.models import Ride, Location, RoutePoint, RidePassenger, RideRequest
 import pytz
@@ -79,6 +80,7 @@ class Command(BaseCommand):
 
     def create_users(self, count):
         """Create realistic Pakistani users"""
+        test_password = required_env("TEST_USER_PASSWORD")
         
         # Pakistani male names
         male_first_names = [
@@ -192,7 +194,7 @@ class Command(BaseCommand):
             user = User.objects.create(
                 username=f"user_{i}_{first_name.lower()}",
                 email=email,
-                password=make_password('testpass123'),
+                password=make_password(test_password),
                 first_name=first_name,
                 last_name=last_name,
                 full_name=full_name,
